@@ -5,7 +5,7 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    --background: 240, 4.76%, 95.88%;
     --foreground: 0 0% 3.9%;
     --card: 0 0% 100%;
     --card-foreground: 0 0% 3.9%;
@@ -32,7 +32,8 @@
     --radius: 0.5rem;
   }
   .dark {
-    --background: 0 0% 3.9%;
+    /* --background: 0 0% 3.9%; */
+    --background: 24, 9.8%, 10%;
     --foreground: 0 0% 98%;
     --card: 0 0% 3.9%;
     --card-foreground: 0 0% 98%;
@@ -77,7 +78,7 @@
 
 *::-webkit-scrollbar-thumb {
   background-color: #374151;
-  border-radius: 14px;
+  border-radius: 10px;
 }
 ::selection {
   background-color: #5c5d5e;

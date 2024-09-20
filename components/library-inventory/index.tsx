@@ -258,7 +258,7 @@ export default function LibraryInventorySystem() {
   )
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="container mx-auto p-4 bg-card shadow-2xl rounded-lg m-2 w-[90%] sm:w-full">
       <h1 className="text-2xl font-bold mb-4">Library Inventory System</h1>
       <Tabs defaultValue="authors">
         <TabsList>
