@@ -148,7 +148,7 @@ export default function LibraryInventorySystem() {
 
         const res = await axios.post('http://localhost:8000/api/publishers', publisherData);
         if(res.status == 201) {
-           setPublishers({...publishers, validatedItem})
+          setPublishers([...publishers, publisherData]);
            setNewPublisher("");
         }
       } else {
@@ -193,11 +193,11 @@ export default function LibraryInventorySystem() {
     try {
       if (type === "publishers") {
         // const validatedPublisher = publisherSchema.parse(editedPublisher)
-        console.log(editedPublisher);
+    
         const res = await axios.put(`http://localhost:8000/api/publishers/${editedPublisher.id}`,{name : editedPublisher.name, country : editedPublisher.country});
-        // setPublishers(publishers.map(publisher => publisher.id === editedPublisher.id ? editedPublisher : publisher))
-        console.log(res);
-        
+
+        setPublishers(publishers.map(publisher => publisher.id === editedPublisher.id ? editedPublisher : publisher))
+
         setEditingPublisherId(null)
         setEditedPublisher(null)
       } else if (type === "genres" && editedGenre) {
@@ -320,7 +320,7 @@ export default function LibraryInventorySystem() {
     </TableRow>
   </TableHeader>
     <TableBody>
-      {items.map((item) => (
+    {Array.isArray(items) && items.map((item) => (
         <TableRow key={item.id}>
           <TableCell>
             {(type === "publishers" ? editingPublisherId : editingGenreId) === item.id ? (
@@ -423,11 +423,13 @@ export default function LibraryInventorySystem() {
   }, []);
 
   const createMap = (array, keyField, valueField) => {
-    return array.reduce((map, item) => {
+    const validArray = Array.isArray(array) ? array : Object.values(array);
+    return validArray.reduce((map, item) => {
       map[item[keyField]] = item[valueField];
       return map;
     }, {});
   };
+  
   
   const authorMap = createMap(authors, 'id', 'name');
   const genreMap = createMap(genres, 'id', 'name');
@@ -681,7 +683,7 @@ export default function LibraryInventorySystem() {
                           <SelectValue placeholder="Select publisher" />
                         </SelectTrigger>
                         <SelectContent>
-                          {publishers.map(publisher => (
+                          {Array.isArray(publishers) && publishers.map(publisher => (
                             <SelectItem key={publisher.id} value={publisher.id}>{publisher.name}</SelectItem>
                           ))}
                         </SelectContent>
@@ -768,7 +770,7 @@ export default function LibraryInventorySystem() {
                 <SelectValue placeholder="Select publisher" />
               </SelectTrigger>
               <SelectContent>
-                {publishers.map(publisher => (
+                {Array.isArray(publishers) && publishers.map(publisher => (
                   <SelectItem key={publisher.id} value={publisher.id}>{publisher.name}</SelectItem>
                 ))}
               </SelectContent>
