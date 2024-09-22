@@ -92,7 +92,6 @@ export default function LibraryInventorySystem() {
     if (editedAuthor && editedAuthor.id === id) {
       setEditedAuthor((prev) => ({ ...prev, [field]: value }));
     } else {
-      // Se não há autor editado, encontre o autor e inicie a edição
       const author = authors.find(a => a.id === id);
       if (author) {
         setEditedAuthor({ ...author, [field]: value });
@@ -109,8 +108,7 @@ export default function LibraryInventorySystem() {
           gender: editedAuthor.gender,
           nationality: editedAuthor.nationality,
         };
-        console.log(authorData);
-        
+
         const res = await axios.put(`http://localhost:8000/api/authors/${editedAuthor.id}`, authorData);
         if (res.status === 200) {
           setAuthors(authors.map(author => author.id === editedAuthor.id ? editedAuthor : author));
@@ -174,11 +172,11 @@ export default function LibraryInventorySystem() {
     }
   }
 
-  const handleEditItem = (type: "publishers" | "genres", id: number, newName: string) => {
+  const handleEditItem = (type: "publishers" | "genres", id: number, newValue: string, field: "name" | "country") => {
     if (type === "publishers") {
-      const publisher = publishers.find(p => p.id === id)
+      const publisher = publishers.find(p => p.id === id);
       if (publisher) {
-        setEditedPublisher({ ...publisher, name: newName })
+        setEditedPublisher(prev => ({ ...prev, id: publisher.id, [field]: newValue }));
       }
     } else {
       const genre = genres.find(g => g.id === id);
@@ -191,29 +189,42 @@ export default function LibraryInventorySystem() {
 
   const handleConfirmEditItem = async (type: "publishers" | "genres") => {
     try {
-      if (type === "publishers") {
-        // const validatedPublisher = publisherSchema.parse(editedPublisher)
-    
-        const res = await axios.put(`http://localhost:8000/api/publishers/${editedPublisher.id}`,{name : editedPublisher.name, country : editedPublisher.country});
-
-        setPublishers(publishers.map(publisher => publisher.id === editedPublisher.id ? editedPublisher : publisher))
-
-        setEditingPublisherId(null)
-        setEditedPublisher(null)
+      if (type === "publishers" && editedPublisher) {
+        
+        if (!editedPublisher.id) {
+          throw new Error("Esta faltando o publisher id");
+        }
+  
+        const res = await axios.put(`http://localhost:8000/api/publishers/${editedPublisher.id}`, {
+          name: editedPublisher.name,
+          country: editedPublisher.country
+        });
+  
+        setPublishers(publishers.map(publisher => publisher.id === editedPublisher.id ? editedPublisher : publisher));
+        setEditingPublisherId(null);
+        setEditedPublisher(null);
       } else if (type === "genres" && editedGenre) {
-        const validatedGenre = genreSchema.parse(editedGenre)
-        const res = await axios.put(`http://localhost:8000/api/genres/${validatedGenre.id}`,{name : validatedGenre.name});
-        setGenres(genres.map(genre => genre.id === validatedGenre.id ? validatedGenre : genre))
-        setEditingGenreId(null)
-        setEditedGenre(null)
+    
+        if (!editedGenre.id) {
+          throw new Error("Esta faltando o publisher id");
+        }
+  
+        const res = await axios.put(`http://localhost:8000/api/genres/${editedGenre.id}`, { name: editedGenre.name });
+        setGenres(genres.map(genre => genre.id === editedGenre.id ? editedGenre : genre));
+        setEditingGenreId(null);
+        setEditedGenre(null);
       }
-      toast({ title: "Success", description: `${type === "publishers" ? "Publisher" : "Genre"} updated successfully` })
+      toast({ title: "Success", description: `${type === "publishers" ? "Publisher" : "Genre"} updated successfully` });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        toast({ title: "Error", description: error.errors[0].message, variant: "destructive" })
+        toast({ title: "Error", description: error.errors[0].message, variant: "destructive" });
+      } else {
+        toast({ title: "Error", description: error.message || "An error occurred while updating.", variant: "destructive" });
       }
     }
-  }
+  };
+  
+  
 
   const handleDeleteItem = async (type: "publishers" | "genres", id: number) => {
 
@@ -277,16 +288,12 @@ export default function LibraryInventorySystem() {
           genre_id: editedBook.genre_id,
           publisher_id: editedBook.publisher_id,
           title: editedBook.title,
-          release_year: editedBook.yearOfPublication, // Verifique se o campo está correto
+          release_year: editedBook.yearOfPublication, 
         };
-        console.log(editBookData); // Verifique os dados a serem enviados
-  
-        // const validatedBook = bookSchema.parse(editBookData); // Valide os dados se necessário
-  
+
         const res = await axios.put(`http://localhost:8000/api/books/${editedBook.id}`, editBookData);
   
-        if (res.status === 200) { // Verifique a resposta da API
-          // Atualize o estado de livros com os dados editados
+        if (res.status === 200) { 
           setBooks(books.map(book => (book.id === editedBook.id ? { ...book, ...editBookData } : book)));
           setEditingBookId(null);
           setEditedBook(null);
@@ -338,9 +345,9 @@ export default function LibraryInventorySystem() {
             <TableCell>
               {editingPublisherId === item.id ? (
                 <Input
-                  value={editedPublisher?.country || item.country}
-                  onChange={(e) => handleEditItem(type, item.id, e.target.value, "country")}
-                />
+                value={editedPublisher?.country || item.country}
+                onChange={(e) => handleEditItem(type, item.id, e.target.value, "country")}
+              />
               ) : (
                 item.country
               )}
@@ -380,8 +387,6 @@ export default function LibraryInventorySystem() {
     const fetchAuthors = async () => {
       try {
         const response = await axios.get('http://localhost:8000/api/authors');
-        // console.log(response);
-        
         setAuthors(response.data.authors);
       } catch (error) {
         console.error("Failed to fetch authors", error);
@@ -409,8 +414,6 @@ export default function LibraryInventorySystem() {
     const fetchPublishers = async () => {
       try {
         const response = await axios.get('http://localhost:8000/api/publishers');
-        console.log(response);
-        
         setPublishers(response.data.publishers);
       } catch (error) {
         console.error("Failed to fetch publishers", error);
@@ -657,7 +660,7 @@ export default function LibraryInventorySystem() {
                   <TableCell>
                     {editingBookId === book.id ? (
                       <Select
-                        value={editedBook?.genre || book.genre_id} // Use genre_id aqui
+                        value={editedBook?.genre || book.genre_id} 
                         onValueChange={(value) => handleEditBook(book.id, "genre", value)}
                       >
                         <SelectTrigger>
@@ -670,13 +673,13 @@ export default function LibraryInventorySystem() {
                         </SelectContent>
                       </Select>
                     ) : (
-                      genreMap[book.genre_id] || "Unknown Genre" // Use o genreMap aqui
+                      genreMap[book.genre_id] || "Unknown Genre"
                     )}
                   </TableCell>
                   <TableCell>
                     {editingBookId === book.id ? (
                       <Select
-                        value={editedBook?.publisher || book.publisher_id} // Use publisher_id aqui
+                        value={editedBook?.publisher || book.publisher_id} 
                         onValueChange={(value) => handleEditBook(book.id, "publisher", value)}
                       >
                         <SelectTrigger>
@@ -689,7 +692,7 @@ export default function LibraryInventorySystem() {
                         </SelectContent>
                       </Select>
                     ) : (
-                      publisherMap[book.publisher_id] || "Unknown Publisher" // Use o publisherMap aqui
+                      publisherMap[book.publisher_id] || "Unknown Publisher" 
                     )}
                   </TableCell>
                   <TableCell>
