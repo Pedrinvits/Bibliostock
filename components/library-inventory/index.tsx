@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -10,18 +10,20 @@ import { PlusIcon, Pencil1Icon, Cross2Icon, CheckIcon } from "@radix-ui/react-ic
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 import { z } from "zod"
+import axios from "axios"
 
 const authorSchema = z.object({
   id: z.number(),
   name: z.string().min(1, "Name is required"),
   yearOfBirth: z.number().min(1000, "Invalid year").max(new Date().getFullYear(), "Year cannot be in the future"),
-  sex: z.enum(["Male", "Female", "Other"]),
+  sex: z.enum(["M", "F", "O"]),
   nationality: z.string().min(1, "Nationality is required"),
 })
 
 const publisherSchema = z.object({
   id: z.number(),
   name: z.string().min(1, "Name is required"),
+  country: z.string().min(1, "Country is required"),
 })
 
 const genreSchema = z.object({
@@ -32,9 +34,9 @@ const genreSchema = z.object({
 const bookSchema = z.object({
   id: z.number(),
   title: z.string().min(1, "Title is required"),
-  author: z.string().min(1, "Author is required"),
-  genre: z.string().min(1, "Genre is required"),
-  publisher: z.string().min(1, "Publisher is required"),
+  author: z.number().min(1, "Author is required"),
+  genre: z.number().min(1, "Genre is required"),
+  publisher: z.number().min(1, "Publisher is required"),
   yearOfPublication: z.number().min(1000, "Invalid year").max(new Date().getFullYear(), "Year cannot be in the future"),
 })
 
@@ -49,7 +51,7 @@ export default function LibraryInventorySystem() {
   const [genres, setGenres] = useState<Genre[]>([])
   const [books, setBooks] = useState<Book[]>([])
   const [newAuthor, setNewAuthor] = useState<Omit<Author, "id">>({ name: "", yearOfBirth: 0, sex: "Male", nationality: "" })
-  const [newPublisher, setNewPublisher] = useState("")
+  const [newPublisher, setNewPublisher] = useState({ name: "", country : ""})
   const [newGenre, setNewGenre] = useState("")
   const [newBook, setNewBook] = useState<Omit<Book, "id">>({ title: "", author: "", genre: "", publisher: "", yearOfPublication: 0 })
   const [editingAuthorId, setEditingAuthorId] = useState<number | null>(null)
@@ -61,59 +63,108 @@ export default function LibraryInventorySystem() {
   const [editedGenre, setEditedGenre] = useState<Genre | null>(null)
   const [editedBook, setEditedBook] = useState<Book | null>(null)
   const { toast } = useToast()
-
-  const handleAddAuthor = () => {
+ 
+  const handleAddAuthor = async ()  => {
     try {
       const validatedAuthor = authorSchema.parse({ ...newAuthor, id: Date.now() })
-      setAuthors([...authors, validatedAuthor])
-      setNewAuthor({ name: "", yearOfBirth: 0, sex: "Male", nationality: "" })
-      toast({ title: "Success", description: "Author added successfully" })
+      
+      const authorData = {
+        name: validatedAuthor.name,
+        birth_year: validatedAuthor.yearOfBirth,  
+        gender: validatedAuthor.sex,              
+        nationality: validatedAuthor.nationality,
+      };
+      const res = await axios.post('http://localhost:8000/api/authors', authorData);
+      if(res.status == 201){
+        setAuthors([...authors, res.data.author])
+        setNewAuthor({ name: "", yearOfBirth: 0, sex: "Male", nationality: "" })
+        toast({ title: "Success", description: res.data.message })
+      }
+      
     } catch (error) {
       if (error instanceof z.ZodError) {
-        toast({ title: "Error", description: error.errors[0].message, variant: "destructive" })
+        toast({ title: "Erro ao criar autor", description: error.errors[0].message, variant: "destructive" })
       }
     }
   }
 
   const handleEditAuthor = (id: number, field: keyof Author, value: string | number) => {
-    const author = authors.find(a => a.id === id)
-    if (author) {
-      setEditedAuthor({ ...author, [field]: value })
+    if (editedAuthor && editedAuthor.id === id) {
+      setEditedAuthor((prev) => ({ ...prev, [field]: value }));
+    } else {
+      // Se não há autor editado, encontre o autor e inicie a edição
+      const author = authors.find(a => a.id === id);
+      if (author) {
+        setEditedAuthor({ ...author, [field]: value });
+      }
     }
-  }
+  };
 
-  const handleConfirmEditAuthor = () => {
+  const handleConfirmEditAuthor = async () => {
     if (editedAuthor) {
       try {
-        const validatedAuthor = authorSchema.parse(editedAuthor)
-        setAuthors(authors.map(author => author.id === validatedAuthor.id ? validatedAuthor : author))
-        setEditingAuthorId(null)
-        setEditedAuthor(null)
-        toast({ title: "Success", description: "Author updated successfully" })
+        const authorData = {
+          name: editedAuthor.name,
+          birth_year: editedAuthor.birth_year,
+          gender: editedAuthor.gender,
+          nationality: editedAuthor.nationality,
+        };
+        console.log(authorData);
+        
+        const res = await axios.put(`http://localhost:8000/api/authors/${editedAuthor.id}`, authorData);
+        if (res.status === 200) {
+          setAuthors(authors.map(author => author.id === editedAuthor.id ? editedAuthor : author));
+          setEditingAuthorId(null);
+          setEditedAuthor(null);
+          toast({ title: "Success", description: "Author updated successfully" });
+        }
       } catch (error) {
         if (error instanceof z.ZodError) {
-          toast({ title: "Error", description: error.errors[0].message, variant: "destructive" })
+          toast({ title: "Error", description: error.errors[0].message, variant: "destructive" });
         }
       }
     }
+  };
+
+  const handleDeleteAuthor = async (id: number) => {
+    const res = await axios.delete(`http://localhost:8000/api/authors/${id}`);
+    if(res.status == 200){
+      setAuthors(authors.filter(author => author.id !== id))
+      toast({ title: "Success", description: "Author deleted successfully" })
+    }
   }
 
-  const handleDeleteAuthor = (id: number) => {
-    setAuthors(authors.filter(author => author.id !== id))
-    toast({ title: "Success", description: "Author deleted successfully" })
-  }
-
-  const handleAddItem = (type: "publishers" | "genres") => {
+  const handleAddItem = async (type: "publishers" | "genres") => {
     try {
       const newItem = type === "publishers" ? newPublisher : newGenre
       const schema = type === "publishers" ? publisherSchema : genreSchema
-      const validatedItem = schema.parse({ id: Date.now(), name: newItem })
+      
       if (type === "publishers") {
-        setPublishers([...publishers, validatedItem])
-        setNewPublisher("")
+        const validatedItem = schema.parse({ id: Date.now(), name: newItem.name, country: newItem.country })
+        const publisherData = {
+          name: validatedItem.name,   
+          country: validatedItem.country,
+        };
+
+        const res = await axios.post('http://localhost:8000/api/publishers', publisherData);
+        if(res.status == 201) {
+           setPublishers({...publishers, validatedItem})
+           setNewPublisher("");
+        }
       } else {
-        setGenres([...genres, validatedItem])
-        setNewGenre("")
+
+        const validatedItem = schema.parse({ id: Date.now(), name: newItem})
+
+        const genreData = {
+          name: validatedItem.name,   
+        };
+
+        const res = await axios.post('http://localhost:8000/api/genres', genreData);
+
+        if(res.status == 201) {
+          setGenres([...genres, validatedItem])
+          setNewGenre("")
+        }
       }
       toast({ title: "Success", description: `${type === "publishers" ? "Publisher" : "Genre"} added successfully` })
     } catch (error) {
@@ -130,22 +181,28 @@ export default function LibraryInventorySystem() {
         setEditedPublisher({ ...publisher, name: newName })
       }
     } else {
-      const genre = genres.find(g => g.id === id)
-      if (genre) {
-        setEditedGenre({ ...genre, name: newName })
+      const genre = genres.find(g => g.id === id);
+      if (genre && field === "name") {
+        setEditedGenre({ ...genre, name: newValue });
       }
     }
-  }
+  };
+  
 
-  const handleConfirmEditItem = (type: "publishers" | "genres") => {
+  const handleConfirmEditItem = async (type: "publishers" | "genres") => {
     try {
-      if (type === "publishers" && editedPublisher) {
-        const validatedPublisher = publisherSchema.parse(editedPublisher)
-        setPublishers(publishers.map(publisher => publisher.id === validatedPublisher.id ? validatedPublisher : publisher))
+      if (type === "publishers") {
+        // const validatedPublisher = publisherSchema.parse(editedPublisher)
+        console.log(editedPublisher);
+        const res = await axios.put(`http://localhost:8000/api/publishers/${editedPublisher.id}`,{name : editedPublisher.name, country : editedPublisher.country});
+        // setPublishers(publishers.map(publisher => publisher.id === editedPublisher.id ? editedPublisher : publisher))
+        console.log(res);
+        
         setEditingPublisherId(null)
         setEditedPublisher(null)
       } else if (type === "genres" && editedGenre) {
         const validatedGenre = genreSchema.parse(editedGenre)
+        const res = await axios.put(`http://localhost:8000/api/genres/${validatedGenre.id}`,{name : validatedGenre.name});
         setGenres(genres.map(genre => genre.id === validatedGenre.id ? validatedGenre : genre))
         setEditingGenreId(null)
         setEditedGenre(null)
@@ -158,20 +215,41 @@ export default function LibraryInventorySystem() {
     }
   }
 
-  const handleDeleteItem = (type: "publishers" | "genres", id: number) => {
+  const handleDeleteItem = async (type: "publishers" | "genres", id: number) => {
+
     if (type === "publishers") {
-      setPublishers(publishers.filter(publisher => publisher.id !== id))
+      const res = await axios.delete(`http://localhost:8000/api/publishers/${id}`);
+      if(res.status == 200){
+        setPublishers(publishers.filter(publisher => publisher.id !== id))
+        toast({ title: "Success", description: "Publisher deleted successfully" })
+      }
+      
     } else {
-      setGenres(genres.filter(genre => genre.id !== id))
+      const res = await axios.delete(`http://localhost:8000/api/genres/${id}`);
+      if(res.status == 200){
+        setGenres(genres.filter(genre => genre.id !== id))
+        toast({ title: "Success", description: "Genre deleted successfully" })
+      }
+     
     }
     toast({ title: "Success", description: `${type === "publishers" ? "Publisher" : "Genre"} deleted successfully` })
   }
 
-  const handleAddBook = () => {
+  const handleAddBook = async () => {
     try {
+
       const validatedBook = bookSchema.parse({ ...newBook, id: Date.now() })
+      const BookData = {
+        "author_id": validatedBook.author,
+        "genre_id": validatedBook.genre,
+        "publisher_id": validatedBook.publisher,
+        "title": validatedBook.title,
+        "release_year": validatedBook.yearOfPublication
+      };
+      const res = await axios.post('http://localhost:8000/api/books', BookData);
+
       setBooks([...books, validatedBook])
-      setNewBook({ title: "", author: "", genre: "", publisher: "", yearOfPublication: 0 })
+      setNewBook({ title: "", author, genre, publisher: "", yearOfPublication: 0 })
       toast({ title: "Success", description: "Book added successfully" })
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -181,27 +259,50 @@ export default function LibraryInventorySystem() {
   }
 
   const handleEditBook = (id: number, field: keyof Book, value: string | number) => {
-    const book = books.find(b => b.id === id)
-    if (book) {
-      setEditedBook({ ...book, [field]: value })
-    }
-  }
-
-  const handleConfirmEditBook = () => {
-    if (editedBook) {
-      try {
-        const validatedBook = bookSchema.parse(editedBook)
-        setBooks(books.map(book => book.id === validatedBook.id ? validatedBook : book))
-        setEditingBookId(null)
-        setEditedBook(null)
-        toast({ title: "Success", description: "Book updated successfully" })
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          toast({ title: "Error", description: error.errors[0].message, variant: "destructive" })
-        }
+    if (editedBook && editedBook.id === id) {
+      setEditedBook((prev) => ({ ...prev, [field]: value }));
+    } else {
+      const book = books.find(b => b.id === id);
+      if (book) {
+        setEditedBook({ ...book, [field]: value });
       }
     }
   }
+
+  const handleConfirmEditBook = async () => {
+    if (editedBook) {
+      try {
+        const editBookData = {
+          author_id: editedBook.author_id,
+          genre_id: editedBook.genre_id,
+          publisher_id: editedBook.publisher_id,
+          title: editedBook.title,
+          release_year: editedBook.yearOfPublication, // Verifique se o campo está correto
+        };
+        console.log(editBookData); // Verifique os dados a serem enviados
+  
+        // const validatedBook = bookSchema.parse(editBookData); // Valide os dados se necessário
+  
+        const res = await axios.put(`http://localhost:8000/api/books/${editedBook.id}`, editBookData);
+  
+        if (res.status === 200) { // Verifique a resposta da API
+          // Atualize o estado de livros com os dados editados
+          setBooks(books.map(book => (book.id === editedBook.id ? { ...book, ...editBookData } : book)));
+          setEditingBookId(null);
+          setEditedBook(null);
+          toast({ title: "Success", description: "Book updated successfully" });
+        }
+      } catch (error) {
+        console.error("Error updating book", error);
+        if (error instanceof z.ZodError) {
+          toast({ title: "Validation Error", description: error.errors[0].message, variant: "destructive" });
+        } else {
+          toast({ title: "Error", description: "Failed to update book", variant: "destructive" });
+        }
+      }
+    }
+  };
+  
 
   const handleDeleteBook = (id: number) => {
     setBooks(books.filter(book => book.id !== id))
@@ -209,56 +310,132 @@ export default function LibraryInventorySystem() {
   }
 
   const renderItemList = (items: Publisher[] | Genre[], type: "publishers" | "genres") => (
+    
     <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Name</TableHead>
-          <TableHead>Actions</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {items.map(item => (
-          <TableRow key={item.id}>
+    <TableHeader>
+    <TableRow>
+      <TableHead>Name</TableHead>
+      {type === "publishers" && <TableHead>Country</TableHead>} 
+      <TableHead>Actions</TableHead>
+    </TableRow>
+  </TableHeader>
+    <TableBody>
+      {items.map((item) => (
+        <TableRow key={item.id}>
+          <TableCell>
+            {(type === "publishers" ? editingPublisherId : editingGenreId) === item.id ? (
+              <Input
+                value={(type === "publishers" ? editedPublisher : editedGenre)?.name || item.name}
+                onChange={(e) => handleEditItem(type, item.id, e.target.value, "name")}
+                autoFocus
+              />
+            ) : (
+              item.name
+            )}
+          </TableCell>
+
+          {type === "publishers" && (
             <TableCell>
-              {(type === "publishers" ? editingPublisherId : editingGenreId) === item.id ? (
+              {editingPublisherId === item.id ? (
                 <Input
-                  value={(type === "publishers" ? editedPublisher : editedGenre)?.name || item.name}
-                  onChange={(e) => handleEditItem(type, item.id, e.target.value)}
-                  autoFocus
+                  value={editedPublisher?.country || item.country}
+                  onChange={(e) => handleEditItem(type, item.id, e.target.value, "country")}
                 />
               ) : (
-                item.name
+                item.country
               )}
             </TableCell>
-            <TableCell>
-              {(type === "publishers" ? editingPublisherId : editingGenreId) === item.id ? (
-                <>
-                  <Button variant="ghost" size="icon" onClick={() => handleConfirmEditItem(type)}>
-                    <CheckIcon className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => type === "publishers" ? setEditingPublisherId(null) : setEditingGenreId(null)}>
-                    <Cross2Icon className="h-4 w-4" />
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button variant="ghost" size="icon" onClick={() => type === "publishers" ? setEditingPublisherId(item.id) : setEditingGenreId(item.id)}>
-                    <Pencil1Icon className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => handleDeleteItem(type, item.id)}>
-                    <Cross2Icon className="h-4 w-4" />
-                  </Button>
-                </>
-              )}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  )
+          )}
 
+
+        <TableCell>
+          {(type === "publishers" ? editingPublisherId : editingGenreId) === item.id ? (
+            <>
+              <Button variant="ghost" size="icon" onClick={() => handleConfirmEditItem(type)}>
+                <CheckIcon className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={() => type === "publishers" ? setEditingPublisherId(null) : setEditingGenreId(null)}>
+                <Cross2Icon className="h-4 w-4" />
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" size="icon" onClick={() => type === "publishers" ? setEditingPublisherId(item.id) : setEditingGenreId(item.id)}>
+                <Pencil1Icon className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={() => handleDeleteItem(type, item.id)}>
+                <Cross2Icon className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+        </TableCell>
+      </TableRow>
+    ))}
+  </TableBody>
+  </Table>
+
+  )
+  useEffect(() => {
+    
+    const fetchAuthors = async () => {
+      try {
+        const response = await axios.get('http://localhost:8000/api/authors');
+        // console.log(response);
+        
+        setAuthors(response.data.authors);
+      } catch (error) {
+        console.error("Failed to fetch authors", error);
+      }
+    };
+
+    const fetchBooks= async () => {
+      try {
+        const response = await axios.get('http://localhost:8000/api/books');
+        setBooks(response.data.books);
+      } catch (error) {
+        console.error("Failed to fetch books", error);
+      }
+    };
+
+    const fetchGenres = async () => {
+      try {
+        const response = await axios.get('http://localhost:8000/api/genres');
+        setGenres(response.data.genre);
+      } catch (error) {
+        console.error("Failed to fetch genres", error);
+      }
+    };
+
+    const fetchPublishers = async () => {
+      try {
+        const response = await axios.get('http://localhost:8000/api/publishers');
+        console.log(response);
+        
+        setPublishers(response.data.publishers);
+      } catch (error) {
+        console.error("Failed to fetch publishers", error);
+      }
+    };
+    fetchBooks();
+    fetchGenres();
+    fetchPublishers();
+    fetchAuthors();
+  }, []);
+
+  const createMap = (array, keyField, valueField) => {
+    return array.reduce((map, item) => {
+      map[item[keyField]] = item[valueField];
+      return map;
+    }, {});
+  };
+  
+  const authorMap = createMap(authors, 'id', 'name');
+  const genreMap = createMap(genres, 'id', 'name');
+  const publisherMap = createMap(publishers, 'id', 'name');
+  
+    
   return (
-    <div className="container mx-auto p-4 bg-card shadow-2xl rounded-lg m-2 w-[90%] sm:w-full">
+    <div className="container mx-auto p-4 bg-card shadow-2xl rounded-lg m-2 w-[90%] sm:w-[90%]">
       <h1 className="text-2xl font-bold mb-4">Library Inventory System</h1>
       <Tabs defaultValue="authors">
         <TabsList>
@@ -285,7 +462,7 @@ export default function LibraryInventorySystem() {
                   <TableCell>
                     {editingAuthorId === author.id ? (
                       <Input
-                        value={editedAuthor?.name || author.name}
+                        value={editedAuthor?.name ?? author.name}
                         onChange={(e) => handleEditAuthor(author.id, "name", e.target.value)}
                         autoFocus
                       />
@@ -296,37 +473,37 @@ export default function LibraryInventorySystem() {
                   <TableCell>
                     {editingAuthorId === author.id ? (
                       <Input
-                        type="number"
-                        value={editedAuthor?.yearOfBirth || author.yearOfBirth}
-                        onChange={(e) => handleEditAuthor(author.id, "yearOfBirth", parseInt(e.target.value))}
+                        type="string"
+                        value={editedAuthor?.birth_year ?? author.birth_year}
+                        onChange={(e) => handleEditAuthor(author.id, "birth_year", parseInt(e.target.value))}
                       />
                     ) : (
-                      author.yearOfBirth
+                      author.birth_year
                     )}
                   </TableCell>
                   <TableCell>
                     {editingAuthorId === author.id ? (
                       <Select
-                        value={editedAuthor?.sex || author.sex}
-                        onValueChange={(value) => handleEditAuthor(author.id, "sex", value)}
+                        value={editedAuthor?.gender ?? author.gender}
+                        onValueChange={(value) => handleEditAuthor(author.id, "gender", value)}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select sex" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Male">Male</SelectItem>
-                          <SelectItem value="Female">Female</SelectItem>
-                          <SelectItem value="Other">Other</SelectItem>
+                          <SelectItem value="M">Male</SelectItem>
+                          <SelectItem value="F">Female</SelectItem>
+                          <SelectItem value="O">Other</SelectItem>
                         </SelectContent>
                       </Select>
                     ) : (
-                      author.sex
+                      author.gender
                     )}
                   </TableCell>
                   <TableCell>
                     {editingAuthorId === author.id ? (
                       <Input
-                        value={editedAuthor?.nationality || author.nationality}
+                        value={editedAuthor?.nationality ?? author.nationality}
                         onChange={(e) => handleEditAuthor(author.id, "nationality", e.target.value)}
                       />
                     ) : (
@@ -378,9 +555,9 @@ export default function LibraryInventorySystem() {
                 <SelectValue placeholder="Select sex" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Male">Male</SelectItem>
-                <SelectItem value="Female">Female</SelectItem>
-                <SelectItem value="Other">Other</SelectItem>
+                <SelectItem value="M">Male</SelectItem>
+                <SelectItem value="F">Female</SelectItem>
+                <SelectItem value="O">Other</SelectItem>
               </SelectContent>
             </Select>
             <Input
@@ -399,8 +576,14 @@ export default function LibraryInventorySystem() {
           <div className="flex mt-4 sm:flex-row flex-col gap-4">
             <Input
               placeholder="New publisher name"
-              value={newPublisher}
-              onChange={(e) => setNewPublisher(e.target.value)}
+              value={newPublisher.name}
+              onChange={(e) => setNewPublisher({ ...newPublisher, name: e.target.value })}
+              className="mr-2"
+            />
+            <Input
+              placeholder="New publisher country"
+              value={newPublisher.country}
+              onChange={(e) => setNewPublisher({ ...newPublisher, country: e.target.value })}
               className="mr-2"
             />
             <Button onClick={() => handleAddItem("publishers")}>
@@ -453,7 +636,7 @@ export default function LibraryInventorySystem() {
                   <TableCell>
                     {editingBookId === book.id ? (
                       <Select
-                        value={editedBook?.author || book.author}
+                        value={editedBook?.author || book.author_id}
                         onValueChange={(value) => handleEditBook(book.id, "author", value)}
                       >
                         <SelectTrigger>
@@ -461,18 +644,18 @@ export default function LibraryInventorySystem() {
                         </SelectTrigger>
                         <SelectContent>
                           {authors.map(author => (
-                            <SelectItem key={author.id} value={author.name}>{author.name}</SelectItem>
+                            <SelectItem key={author.id} value={author.id}>{author.name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     ) : (
-                      book.author
+                      authorMap[book.author_id] || "Unknown Author"
                     )}
                   </TableCell>
                   <TableCell>
                     {editingBookId === book.id ? (
                       <Select
-                        value={editedBook?.genre || book.genre}
+                        value={editedBook?.genre || book.genre_id} // Use genre_id aqui
                         onValueChange={(value) => handleEditBook(book.id, "genre", value)}
                       >
                         <SelectTrigger>
@@ -480,18 +663,18 @@ export default function LibraryInventorySystem() {
                         </SelectTrigger>
                         <SelectContent>
                           {genres.map(genre => (
-                            <SelectItem key={genre.id} value={genre.name}>{genre.name}</SelectItem>
+                            <SelectItem key={genre.id} value={genre.id}>{genre.name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     ) : (
-                      book.genre
+                      genreMap[book.genre_id] || "Unknown Genre" // Use o genreMap aqui
                     )}
                   </TableCell>
                   <TableCell>
                     {editingBookId === book.id ? (
                       <Select
-                        value={editedBook?.publisher || book.publisher}
+                        value={editedBook?.publisher || book.publisher_id} // Use publisher_id aqui
                         onValueChange={(value) => handleEditBook(book.id, "publisher", value)}
                       >
                         <SelectTrigger>
@@ -499,23 +682,23 @@ export default function LibraryInventorySystem() {
                         </SelectTrigger>
                         <SelectContent>
                           {publishers.map(publisher => (
-                            <SelectItem key={publisher.id} value={publisher.name}>{publisher.name}</SelectItem>
+                            <SelectItem key={publisher.id} value={publisher.id}>{publisher.name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     ) : (
-                      book.publisher
+                      publisherMap[book.publisher_id] || "Unknown Publisher" // Use o publisherMap aqui
                     )}
                   </TableCell>
                   <TableCell>
                     {editingBookId === book.id ? (
                       <Input
                         type="number"
-                        value={editedBook?.yearOfPublication || book.yearOfPublication}
+                        value={editedBook?.yearOfPublication || book.release_year}
                         onChange={(e) => handleEditBook(book.id, "yearOfPublication", parseInt(e.target.value))}
                       />
                     ) : (
-                      book.yearOfPublication
+                      book.release_year
                     )}
                   </TableCell>
                   <TableCell>
@@ -542,6 +725,8 @@ export default function LibraryInventorySystem() {
                 </TableRow>
               ))}
             </TableBody>
+
+
           </Table>
           <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 mt-4">
             <Input
@@ -558,7 +743,7 @@ export default function LibraryInventorySystem() {
               </SelectTrigger>
               <SelectContent>
                 {authors.map(author => (
-                  <SelectItem key={author.id} value={author.name}>{author.name}</SelectItem>
+                  <SelectItem key={author.id} value={author.id}>{author.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -571,7 +756,7 @@ export default function LibraryInventorySystem() {
               </SelectTrigger>
               <SelectContent>
                 {genres.map(genre => (
-                  <SelectItem key={genre.id} value={genre.name}>{genre.name}</SelectItem>
+                  <SelectItem key={genre.id} value={genre.id}>{genre.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -584,7 +769,7 @@ export default function LibraryInventorySystem() {
               </SelectTrigger>
               <SelectContent>
                 {publishers.map(publisher => (
-                  <SelectItem key={publisher.id} value={publisher.name}>{publisher.name}</SelectItem>
+                  <SelectItem key={publisher.id} value={publisher.id}>{publisher.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
